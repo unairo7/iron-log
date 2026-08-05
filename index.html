@@ -73,7 +73,7 @@ input,textarea,select{background:#fff;color:var(--text)}
     <div class="card"><h3>Объём последних тренировок</h3><div class="chart" id="chart"></div></div>
     <div class="card"><h3>Личные результаты</h3><div id="pbList"></div></div>
     <div class="card"><h3>Как прогрессировать сейчас</h3><p class="muted" style="font-size:13px">Подсказки рассчитываются по последней записанной тренировке.</p><div class="guide" id="progressGuide"></div></div>
-    <div class="card"><h3>Резервная копия</h3><p class="muted" style="font-size:13px">Данные хранятся только в браузере этого телефона. Иногда скачивай копию.</p><div class="tools"><button class="ghost" id="export">Скачать данные</button><button class="ghost" id="import">Восстановить</button></div><input type="file" id="file" accept="application/json" hidden></div>
+    <div class="card"><h3>Резервная копия</h3><p class="muted" style="font-size:13px">Данные хранятся только в браузере этого телефона. На iPhone после нажатия выбери «Сохранить в Файлы».</p><div class="tools"><button class="ghost" id="export">Сохранить данные</button><button class="ghost" id="import">Восстановить</button></div><input type="file" id="file" accept="application/json" hidden></div>
   </section>
 </main>
 <nav class="nav" aria-label="Навигация"><button class="active" data-view="workout"><span>●</span>Тренировка</button><button data-view="history"><span>≡</span>История</button><button data-view="progress"><span>↗</span>Статистика</button></nav>
@@ -156,7 +156,18 @@ $$(".nav button").forEach(b=>b.onclick=()=>{$$(".view").forEach(v=>v.classList.t
 $$("[data-day]").forEach(b=>b.onclick=()=>switchDay(b.dataset.day));$("#bag").querySelectorAll("button").forEach(b=>b.onclick=()=>{bag=+b.dataset.min;$("#bag").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));estimateCalories()});
 ["weightBefore","duration"].forEach(id=>$("#"+id).addEventListener("input",estimateCalories));$("#effort").addEventListener("change",estimateCalories);
 $("#filters").querySelectorAll("button").forEach(b=>b.onclick=()=>{filter=b.dataset.filter;$("#filters").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));renderHistory()});
-$("#export").onclick=()=>{let blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`zhelezny-ruslan-${iso()}.json`;a.click();URL.revokeObjectURL(a.href);toast("Копия скачана")};$("#import").onclick=()=>$("#file").click();
+async function exportData(){
+ let filename=`zhelezny-ruslan-${iso()}.json`,blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+ try{
+  let file=new File([blob],filename,{type:"application/json"});
+  if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+   await navigator.share({title:"Железный Руслан — резервная копия",files:[file]});
+   toast("Копия сохранена или отправлена");return
+  }
+ }catch(error){if(error&&error.name==="AbortError")return}
+ let a=document.createElement("a"),url=URL.createObjectURL(blob);a.href=url;a.download=filename;a.hidden=true;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);toast("Копия скачана")
+}
+$("#export").onclick=exportData;$("#import").onclick=()=>$("#file").click();
 $("#file").onchange=async e=>{try{let x=JSON.parse(await e.target.files[0].text());if(!x||!Array.isArray(x.sessions))throw 0;if(!confirm(`Восстановить ${x.sessions.length} тренировок?`))return;state=x;persist();update();toast("Данные восстановлены")}catch{toast("Не удалось прочитать файл")}e.target.value=""};
 $("#today").textContent=new Intl.DateTimeFormat("ru-RU",{weekday:"short",day:"numeric",month:"short"}).format(new Date());$("#date").value=iso();renderExercises();update();
 </script>
