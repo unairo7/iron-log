@@ -85,10 +85,23 @@ day1:{title:"Грудь, плечи, руки",short:"День 1",ex:[
 ["bench","Жим штанги лёжа","4 × 12–10–8–8","🏋️","Грудь",1,[12,10,8,8]],["incline","Жим гантелей на наклонной","4 × 12–10–8–8","↗️","Грудь",1,[12,10,8,8]],["chestfly","Разведение гантелей лёжа на скамье","4 × 12–10–8–8","🪽","Грудь",1,[12,10,8,8]],["shoulder","Жим гантелей сидя","4 × 12–10–8–8","💪","Плечи",1,[12,10,8,8]],["lateral","Разведения гантелей в стороны","4 × 12–10–8–8","🪽","Плечи",1,[12,10,8,8]],["curl","Подъём штанги на бицепс","4 × 12–10–8–8","💪","Бицепс",1,[12,10,8,8]],["pushdown","Разгибание рук на блоке","4 × 12–10–8–8","⬇️","Трицепс",1,[12,10,8,8]],["abs","Пресс","4 подхода","🔥","Кор",0,["макс","макс","макс","макс"]]]},
 day2:{title:"Ноги и спина",short:"День 2",ex:[
 ["legpress","Жим ногами","4 × 12–10–8–8","🦵","Ноги",1,[12,10,8,8]],["extension","Разгибание ног","4 × 12–10–8–8","⚙️","Квадрицепс",1,[12,10,8,8]],["lunges","Выпады","4 × 12–10–8–8","🚶","Ноги",1,[12,10,8,8]],["calves","Подъёмы на икры","4 × 12–15","⬆️","Икры",1,[12,15,15,15]],["pullups","Подтягивания в тренажёре","4 × 12–10–8–8","🧗","Спина",1,[12,10,8,8]],["pulldown","Тяга верхнего блока","4 × 12–10–8–8","⬇️","Спина",1,[12,10,8,8]],["row","Горизонтальная тяга","4 × 12–10–8–8","↔️","Спина",1,[12,10,8,8]]]}};
-const KEY="ironLogData_v1",$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-let state=load(),day="day1",bag=0,filter="all";
+const KEY="ironLogData_v1",DRAFT_KEY="ironLogDraft_v1",$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+let state=load(),drafts=loadDrafts(),day="day1",bag=0,filter="all";if(PROGRAM[drafts.activeDay])day=drafts.activeDay;
 function load(){try{let x=JSON.parse(localStorage.getItem(KEY));return x&&Array.isArray(x.sessions)?x:{sessions:[]}}catch{return{sessions:[]}}}
 function persist(){localStorage.setItem(KEY,JSON.stringify(state))}
+function loadDrafts(){try{let x=JSON.parse(localStorage.getItem(DRAFT_KEY));return x&&typeof x==="object"?x:{}}catch{return{}}}
+function persistDrafts(){localStorage.setItem(DRAFT_KEY,JSON.stringify(drafts))}
+function saveDraft(){
+ if(!$("#date")||!$$(".exercise").length)return;
+ let fields={};["date","weightBefore","weightAfter","duration","effort","notes"].forEach(id=>fields[id]=$("#"+id).value);
+ drafts[day]={bag,bagSet:!!$("#bag button.active")||!!$("#bagOther").value,fields,exercises:$$(".exercise").map(c=>({id:c.dataset.id,sets:[...c.querySelectorAll(".setrow")].map(r=>({weight:r.querySelector(".weight").value,reps:r.querySelector(".reps").value,done:r.querySelector(".done").checked}))}))};drafts.activeDay=day;persistDrafts();
+}
+function restoreDraft(){
+ let x=drafts[day],fields=x&&x.fields||{};["date","weightBefore","weightAfter","duration","effort","notes"].forEach(id=>$("#"+id).value=fields[id]??(id==="date"?iso():""));
+ bag=x?num(x.bag):0;let presets=[0,20,25,30];$("#bag").querySelectorAll("button").forEach(b=>b.classList.toggle("active",!!x&&x.bagSet&&+b.dataset.min===bag));$("#bagOther").value=x&&x.bagSet&&!presets.includes(bag)&&bag?bag:"";
+ let saved=new Map((x&&x.exercises||[]).map(e=>[e.id,e]));$$(".exercise").forEach(c=>{let e=saved.get(c.dataset.id);if(!e)return;[...c.querySelectorAll(".setrow")].forEach((r,i)=>{let s=e.sets&&e.sets[i];if(!s)return;r.querySelector(".weight").value=s.weight??"";r.querySelector(".reps").value=s.reps??"";r.querySelector(".done").checked=!!s.done})});renderLive();
+}
+function clearDraft(d=day){delete drafts[d];drafts.activeDay=day;persistDrafts()}
 function iso(){let d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
 function num(x){return Number(String(x).replace(",","."))||0}
 function pretty(d,short=0){return new Intl.DateTimeFormat("ru-RU",short?{day:"numeric",month:"short"}:{day:"numeric",month:"long",year:"numeric"}).format(new Date(d+"T12:00:00"))}
@@ -118,14 +131,14 @@ function renderExercises(){
  $$(".setrow input:not(.done)").forEach(x=>x.oninput=()=>{if(x.value)x.closest(".setrow").querySelector(".done").checked=true;renderLive()});
  $$(".setrow .done").forEach(x=>x.onchange=renderLive);renderLive();
 }
-function switchDay(d){day=d;bag=0;$("#bagOther").value="";$$("[data-day]").forEach(x=>x.classList.toggle("active",x.dataset.day===d));$("#bag").querySelectorAll("button").forEach(x=>x.classList.remove("active"));renderExercises()}
+function switchDay(d){if(d===day)return;saveDraft();day=d;drafts.activeDay=day;persistDrafts();bag=0;$("#bagOther").value="";$$("[data-day]").forEach(x=>x.classList.toggle("active",x.dataset.day===d));$("#bag").querySelectorAll("button").forEach(x=>x.classList.remove("active"));renderExercises();restoreDraft()}
 function collect(){let before=num($("#weightBefore").value)||null,id=window.crypto&&typeof window.crypto.randomUUID==="function"?window.crypto.randomUUID():Date.now()+"-"+Math.random();return{id:id,date:$("#date").value||iso(),day,bagMinutes:bag,bodyWeight:before,bodyWeightBefore:before,bodyWeightAfter:num($("#weightAfter").value)||null,duration:num($("#duration").value)||null,effort:num($("#effort").value)||null,calories:num($("#calories").value)||null,notes:$("#notes").value.trim(),createdAt:new Date().toISOString(),exercises:$$(".exercise").map(c=>{let e=PROGRAM[day].ex.find(x=>x[0]===c.dataset.id);return{id:e[0],name:e[1],icon:e[3],weighted:!!e[5],sets:[...c.querySelectorAll(".setrow")].map(r=>({weight:num(r.querySelector(".weight").value),reps:num(r.querySelector(".reps").value),note:e[5]?"":r.querySelector(".reps").value.trim(),done:r.querySelector(".done").checked}))}})}}
 function setCount(s){return s.exercises.reduce((a,e)=>a+e.sets.filter(x=>x.done||x.weight||x.reps||x.note).length,0)}
 function volume(s){return s.exercises.reduce((a,e)=>a+e.sets.reduce((b,x)=>b+(e.weighted?x.weight*x.reps:0),0),0)}
 function reset(){bag=0;$("#bagOther").value="";["weightBefore","weightAfter","duration","calories","notes"].forEach(id=>$("#"+id).value="");$("#effort").value="";$("#date").value=iso();$("#bag").querySelectorAll("button").forEach(x=>x.classList.remove("active"));renderExercises()}
 $("#save").onclick=()=>{let s=collect(),n=setCount(s);if(!n&&!s.bagMinutes)return toast("Заполни хотя бы один подход");let weight=s.bodyWeightBefore&&s.bodyWeightAfter?` · ${s.bodyWeightBefore}→${s.bodyWeightAfter} кг`:"";$("#confirmText").textContent=`${pretty(s.date)} · ${n} подходов${s.duration?` · ${s.duration} мин`:""}${s.calories?` · ${s.calories} ккал`:""}${weight}.`;$("#sheet").classList.add("show")};
 $("#cancel").onclick=()=>$("#sheet").classList.remove("show");$("#sheet").onclick=e=>{if(e.target.id==="sheet")$("#sheet").classList.remove("show")};
-$("#confirm").onclick=()=>{let s=collect();state.sessions.push(s);state.sessions.sort((a,b)=>a.date.localeCompare(b.date)||a.createdAt.localeCompare(b.createdAt));persist();$("#sheet").classList.remove("show");reset();update();toast("Тренировка сохранена")};
+$("#confirm").onclick=()=>{let s=collect();state.sessions.push(s);state.sessions.sort((a,b)=>a.date.localeCompare(b.date)||a.createdAt.localeCompare(b.createdAt));persist();clearDraft();$("#sheet").classList.remove("show");reset();update();toast("Тренировка сохранена")};
 function weightFlow(s){let before=s.bodyWeightBefore||s.bodyWeight,after=s.bodyWeightAfter;if(before&&after)return`${before}→${after}`;return before||after||""}
 function programLabel(dayId,key){return PROGRAM[dayId]&&PROGRAM[dayId][key]?PROGRAM[dayId][key]:"Тренировка"}
 function renderHistory(){
@@ -153,8 +166,9 @@ function renderGuide(ss){
 }
 function update(){let start=new Date();start.setDate(start.getDate()-6);start.setHours(0,0,0,0);$("#week").textContent=state.sessions.filter(s=>new Date(s.date+"T12:00:00")>=start).length;renderHistory();renderStats()}
 $$(".nav button").forEach(b=>b.onclick=()=>{$$(".view").forEach(v=>v.classList.toggle("active",v.id===b.dataset.view));$$(".nav button").forEach(x=>x.classList.toggle("active",x===b));window.scrollTo({top:0,behavior:"smooth"})});
-$$("[data-day]").forEach(b=>b.onclick=()=>switchDay(b.dataset.day));$("#bag").querySelectorAll("button").forEach(b=>b.onclick=()=>{bag=+b.dataset.min;$("#bagOther").value="";$("#bag").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));estimateCalories()});$("#bagOther").oninput=e=>{bag=Math.max(0,num(e.target.value));$("#bag").querySelectorAll("button").forEach(x=>x.classList.remove("active"));estimateCalories()};
+$$("[data-day]").forEach(b=>b.onclick=()=>switchDay(b.dataset.day));$("#bag").querySelectorAll("button").forEach(b=>b.onclick=()=>{bag=+b.dataset.min;$("#bagOther").value="";$("#bag").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));estimateCalories();saveDraft()});$("#bagOther").oninput=e=>{bag=Math.max(0,num(e.target.value));$("#bag").querySelectorAll("button").forEach(x=>x.classList.remove("active"));estimateCalories();saveDraft()};
 ["weightBefore","duration"].forEach(id=>$("#"+id).addEventListener("input",estimateCalories));$("#effort").addEventListener("change",estimateCalories);
+$("#workout").addEventListener("input",saveDraft);$("#workout").addEventListener("change",saveDraft);document.addEventListener("visibilitychange",()=>{if(document.hidden)saveDraft()});window.addEventListener("pagehide",saveDraft);
 $("#filters").querySelectorAll("button").forEach(b=>b.onclick=()=>{filter=b.dataset.filter;$("#filters").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));renderHistory()});
 async function exportData(){
  let filename=`zhelezny-ruslan-${iso()}.json`,blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
@@ -169,7 +183,7 @@ async function exportData(){
 }
 $("#export").onclick=exportData;$("#import").onclick=()=>$("#file").click();
 $("#file").onchange=async e=>{try{let x=JSON.parse(await e.target.files[0].text());if(!x||!Array.isArray(x.sessions))throw 0;if(!confirm(`Восстановить ${x.sessions.length} тренировок?`))return;state=x;persist();update();toast("Данные восстановлены")}catch{toast("Не удалось прочитать файл")}e.target.value=""};
-$("#today").textContent=new Intl.DateTimeFormat("ru-RU",{weekday:"short",day:"numeric",month:"short"}).format(new Date());$("#date").value=iso();renderExercises();update();
+$("#today").textContent=new Intl.DateTimeFormat("ru-RU",{weekday:"short",day:"numeric",month:"short"}).format(new Date());$("#date").value=iso();$$("[data-day]").forEach(x=>x.classList.toggle("active",x.dataset.day===day));renderExercises();restoreDraft();update();
 </script>
 </body>
 </html>
